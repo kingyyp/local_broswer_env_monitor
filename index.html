@@ -1,0 +1,396 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Edge AI 電腦周邊安全防護與即時監察系統</title>
+    <script defer src="https://cdn.jsdelivr.net/npm/@vladmandic/face-api/dist/face-api.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script type="text/javascript" src="https://cdn.jsdelivr.net/npm/@emailjs/browser@3/dist/email.min.js"></script>
+    
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background-color: #1a1a24; color: #e0e0e0; margin: 0; padding: 20px; display: flex; flex-direction: column; align-items: center; }
+        h1 { color: #e74c3c; margin-bottom: 5px; }
+        .subtitle { color: #aaa; margin-bottom: 20px; font-size: 14px; }
+        .container { display: flex; flex-wrap: wrap; gap: 20px; justify-content: center; max-width: 1400px; width: 100%; }
+        .video-box { position: relative; background: #000; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 15px rgba(0,0,0,0.5); width: 640px; height: 480px; border: 2px solid #333; }
+        video, canvas { position: absolute; top: 0; left: 0; width: 640px; height: 480px; }
+        
+        .config-panel { background: #252532; padding: 20px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.3); flex: 1; min-width: 450px; display: flex; flex-direction: column; gap: 15px; }
+        .form-group { display: flex; flex-direction: column; gap: 5px; }
+        label { font-size: 14px; color: #bdc3c7; font-weight: bold; }
+        input[type="text"], input[type="email"], select { background: #333; border: 1px solid #444; color: #fff; padding: 8px; border-radius: 6px; }
+        
+        .status { font-weight: bold; color: #fff; margin-bottom: 15px; background: #2c3e50; padding: 8px 16px; border-radius: 20px; text-align: center; width: 80%; max-width: 600px; transition: background 0.3s; }
+        .status.alerting { background: #c0392b; animation: blink 1s infinite; }
+        @keyframes blink { 0% { opacity: 1; } 50% { opacity: 0.7; } 100% { opacity: 1; } }
+
+        .btn { background-color: #e74c3c; color: white; border: none; padding: 10px 15px; border-radius: 6px; cursor: pointer; font-size: 14px; font-weight: bold; }
+        .btn-success { background-color: #2ecc71; }
+        .btn:disabled { background-color: #7f8c8d; cursor: not-allowed; }
+
+        .dashboard { background: #252532; padding: 20px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.3); width: 100%; max-width: 1360px; margin-top: 20px; display: grid; grid-template-columns: 1fr 2fr; gap: 20px; }
+        .log-table-container { overflow-y: auto; max-height: 400px; border: 1px solid #444; border-radius: 6px; background: #1e1e28; }
+        table { width: 100%; border-collapse: collapse; font-size: 13px; color: #ccc; }
+        th, td { padding: 10px; text-align: left; border-bottom: 1px solid #333; }
+        th { background-color: #2c2c3a; position: sticky; top: 0; color: #fff; }
+        
+        .snapshot-img { width: 80px; height: 60px; object-fit: cover; border-radius: 4px; border: 1px solid #555; }
+        .vol-bar { width: 100%; background: #444; height: 15px; border-radius: 10px; overflow: hidden; position: relative; }
+        .vol-inner { height: 100%; width: 0%; background: #2ecc71; transition: width 0.1s; }
+    </style>
+</head>
+<body>
+
+    <h1>Edge AI 電腦周邊安全防護與即時監察系統</h1>
+    <div class="subtitle">當檢測到有人試圖接近或接觸電腦時，系統將自動擷取畫面、評估環境音量並發送警告電郵。</div>
+
+    <div id="status" class="status">⏳ 正在初始化本地 AI 視覺探測核心...</div>
+
+    <div class="container">
+        <div class="video-box">
+            <video id="video" autoplay muted playsinline></video>
+            <canvas id="overlay"></canvas>
+        </div>
+
+        <div class="config-panel">
+            <h3>🛡️ 系統安全設定</h3>
+            
+            <div class="form-group">
+                <label>通知接收通知電郵 (Email)：</label>
+                <input type="email" id="targetEmail" placeholder="example@gmail.com" value="">
+            </div>
+
+            <div class="form-group">
+                <label>聲音感應靈敏度 (當前音量超過此值觸發)：</label>
+                <div class="vol-bar"><div id="volInner" class="vol-inner"></div></div>
+                <select id="soundThreshold">
+                    <option value="999">關閉聲音監測</option>
+                    <option value="50">高靈敏度 (稍有聲響)</option>
+                    <option value="70" selected>中靈敏度 (正常說話/碰撞)</option>
+                    <option value="90">低靈敏度 (大聲喧嘩)</option>
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label>警報冷卻時間 (秒，避免連續重複發信)：</label>
+                <input type="text" id="coolDownTime" value="30">
+            </div>
+
+            <div style="margin-top: 10px; display: flex; gap: 10px;">
+                <button id="startBtn" class="btn btn-success" onclick="toggleMonitoring()">開啟安全監察防禦</button>
+            </div>
+            
+            <div style="font-size: 11px; color: #888;">
+                * 註：本系統完全在本地瀏覽器運行處理。電郵發送需填寫下方 EmailJS 配置方可真正送出。
+            </div>
+        </div>
+    </div>
+
+    <div class="dashboard">
+        <div>
+            <h3>📊 統計數據</h3>
+            <p>安全防禦狀態: <span id="defenseStatus" style="color:#e74c3c; font-weight:bold;">未啟動</span></p>
+            <p>本次運行引發警報次數: <span id="alertCount" style="color:#f1c40f; font-weight:bold; font-size:20px;">0</span> 次</p>
+            <div style="width: 100%; height: 200px;">
+                <canvas id="alertChart"></canvas>
+            </div>
+        </div>
+        
+        <div>
+            <h3>📋 侵入與異動歷史記錄</h3>
+            <div class="log-table-container">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>時間</th>
+                            <th>觸發原因</th>
+                            <th>現場快照</th>
+                            <th>環境音量指數</th>
+                            <th>電郵通知狀態</th>
+                        </tr>
+                    </thead>
+                    <tbody id="logTrack">
+                        <tr><td colspan="5" style="text-align:center; color:#666;">暫無警報記錄</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // --- EmailJS 配置 (請在此處填入您申請的免費憑證，即可啟用真實電子郵件通知) ---
+        const EMAILJS_PUBLIC_KEY = "YOUR_PUBLIC_KEY"; 
+        const EMAILJS_SERVICE_ID = "YOUR_SERVICE_ID";
+        const EMAILJS_TEMPLATE_ID = "YOUR_TEMPLATE_ID";
+
+        if (EMAILJS_PUBLIC_KEY !== "YOUR_PUBLIC_KEY") {
+            emailjs.init(EMAILJS_PUBLIC_KEY);
+        }
+
+        const video = document.getElementById('video');
+        const canvas = document.getElementById('overlay');
+        const statusDiv = document.getElementById('status');
+        const logTrack = document.getElementById('logTrack');
+        const volInner = document.getElementById('volInner');
+
+        let isMonitoring = false;
+        let audioContext = null;
+        let analyser = null;
+        let microphone = null;
+        let javascriptNode = null;
+        
+        let currentVolume = 0;
+        let totalAlerts = 0;
+        let lastAlertTime = 0; 
+        let chartInstance = null;
+        let chartData = { labels: [], datasets: [{ label: '每分鐘警報次數', data: [], backgroundColor: '#e74c3c' }] };
+
+        // 初始化
+        async function init() {
+            try {
+                statusDiv.innerText = "⏳ 正在載入 AI 視覺人臉與目標追蹤模型...";
+                const FACE_MODEL_URL = 'https://cdn.jsdelivr.net/npm/@vladmandic/face-api/model/';
+                await faceapi.nets.ssdMobilenetv1.loadFromUri(FACE_MODEL_URL);
+                statusDiv.innerHTML = "🟢 <span style='color: #2ecc71;'>AI 核心載入完成。請輸入電郵並點擊按鈕開啟防禦。</span>";
+                
+                initChart();
+                startCamera();
+            } catch (err) {
+                statusDiv.innerHTML = "❌ 核心載入失敗: " + err.message;
+            }
+        }
+
+        // 啟動相機
+        function startCamera() {
+            navigator.mediaDevices.getUserMedia({ video: { width: 640, height: 480 } })
+                .then(stream => { video.srcObject = stream; })
+                .catch(err => { statusDiv.innerText = "無法獲取鏡頭權限: " + err.message; });
+        }
+
+        // 啟動與關閉監控開關
+        async function toggleMonitoring() {
+            const emailInput = document.getElementById('targetEmail').value;
+            if (!emailInput && !isMonitoring) {
+                alert("請先輸入用來接收警告通知的電子郵件地址！");
+                return;
+            }
+
+            isMonitoring = !isMonitoring;
+            const startBtn = document.getElementById('startBtn');
+
+            if (isMonitoring) {
+                startBtn.innerText = "停止安全監察防禦";
+                startBtn.className = "btn";
+                document.getElementById('defenseStatus').innerText = "核心防禦中 🛡️";
+                document.getElementById('defenseStatus').style.color = "#2ecc71";
+                statusDiv.innerText = "🚨 系統已進入全時全能防禦監控狀態...";
+                
+                // 啟動音訊監聽
+                initAudio();
+                // 進入主監控循環
+                detectionLoop();
+            } else {
+                startBtn.innerText = "開啟安全監察防禦";
+                startBtn.className = "btn btn-success";
+                document.getElementById('defenseStatus').innerText = "已暫停";
+                document.getElementById('defenseStatus').style.color = "#e74c3c";
+                statusDiv.innerHTML = "🟢 系統已暫停防禦。";
+                
+                if (audioContext) audioContext.close();
+                const ctx = canvas.getContext('2d');
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+            }
+        }
+
+        // 初始化音訊監測 (Mic)
+        function initAudio() {
+            navigator.mediaDevices.getUserMedia({ audio: true, video: false })
+                .then(stream => {
+                    audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                    analyser = audioContext.createAnalyser();
+                    microphone = audioContext.createMediaStreamSource(stream);
+                    javascriptNode = audioContext.createScriptProcessor(2048, 1, 1);
+
+                    analyser.smoothingTimeConstant = 0.8;
+                    analyser.fftSize = 1024;
+
+                    microphone.connect(analyser);
+                    analyser.connect(javascriptNode);
+                    javascriptNode.connect(audioContext.destination);
+
+                    javascriptNode.onaudioprocess = function() {
+                        const array = new Uint8Array(analyser.frequencyBinCount);
+                        analyser.getByteFrequencyData(array);
+                        let values = 0;
+                        const length = array.length;
+                        for (let i = 0; i < length; i++) { values += array[i]; }
+                        currentVolume = Math.round(values / length);
+                        
+                        // 更新音量 UI 條
+                        if (isMonitoring) {
+                            volInner.style.width = Math.min(currentVolume * 2, 100) + "%";
+                            checkSoundTrigger();
+                        }
+                    };
+                }).catch(err => {
+                    console.log("未獲取麥克風權限或無音訊設備，聲音監測將關閉: " + err.message);
+                });
+        }
+
+        // 聲音引發警報檢查
+        function checkSoundTrigger() {
+            const threshold = parseInt(document.getElementById('soundThreshold').value);
+            if (currentVolume > threshold) {
+                triggerAlert("周圍偵測到異常聲響 / 碰撞聲");
+            }
+        }
+
+        // 主監控循環 (視覺部分)
+        async function detectionLoop() {
+            if (!isMonitoring || video.paused || video.ended) return;
+
+            // 進行人臉/人頭偵測
+            const detections = await faceapi.detectAllFaces(video, new faceapi.SsdMobilenetv1Options({ minConfidence: 0.5 }));
+            
+            const displaySize = { width: 640, height: 480 };
+            faceapi.matchDimensions(canvas, displaySize);
+            const resizedDetections = faceapi.resizeResults(detections, displaySize);
+            
+            const ctx = canvas.getContext('2d');
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            // 如果畫面上出現任何人頭/臉
+            if (resizedDetections.length > 0) {
+                // 繪製紅框
+                resizedDetections.forEach(detection => {
+                    const box = detection.detection.box;
+                    const drawBox = new faceapi.draw.DrawBox(box, { label: '⚠️ 未授權接近者', boxColor: '#e74c3c' });
+                    drawBox.draw(canvas);
+                });
+
+                triggerAlert(`視覺警報：偵測到 ${resizedDetections.length} 名人員試圖接近電腦`);
+            }
+
+            setTimeout(() => detectionLoop(), 200);
+        }
+
+        // 觸發警報核心機制
+        function triggerAlert(reason) {
+            const now = Date.now();
+            const coolDown = parseInt(document.getElementById('coolDownTime').value) * 1000;
+
+            // 狀態列變紅提示
+            statusDiv.classList.add('alerting');
+            statusDiv.innerText = `🚨 警告!! ${reason}`;
+            setTimeout(() => statusDiv.classList.remove('alerting'), 2000);
+
+            // 檢查是否仍在冷卻時間內
+            if (now - lastAlertTime < coolDown) {
+                return; 
+            }
+
+            lastAlertTime = now;
+            totalAlerts++;
+            document.getElementById('alertCount').innerText = totalAlerts;
+
+            // 擷取目前鏡頭畫面作為快照 (Base64)
+            const snapshotCanvas = document.createElement('canvas');
+            snapshotCanvas.width = 320;
+            snapshotCanvas.height = 240;
+            const sCtx = snapshotCanvas.getContext('2d');
+            sCtx.drawImage(video, 0, 0, 320, 240);
+            const snapshotDataUrl = snapshotCanvas.toDataURL('image/jpeg');
+
+            // 更新歷史記錄表格
+            appendLogTable(reason, snapshotDataUrl, currentVolume);
+
+            // 更新圖表數據
+            updateChartData();
+
+            // 發送電子郵件通知
+            sendEmailNotification(reason, snapshotDataUrl);
+        }
+
+        // 將警報紀錄寫入網頁表格
+        function appendLogTable(reason, imgData, vol) {
+            if (totalAlerts === 1) logTrack.innerHTML = ''; // 清除「暫無記錄」
+
+            const tr = document.createElement('tr');
+            const timeStr = new Date().toLocaleTimeString();
+            
+            tr.innerHTML = `
+                <td>${timeStr}</td>
+                <td style="color:#e74c3c; font-weight:bold;">${reason}</td>
+                <td><img class="snapshot-img" src="${imgData}" /></td>
+                <td>${vol} dB</td>
+                <td id="mailStatus_${totalAlerts}"><span style="color:#f1c40f;">準備發送...</span></td>
+            `;
+            logTrack.insertBefore(tr, logTrack.firstChild);
+        }
+
+        // 發送電子郵件
+        function sendEmailNotification(reason, snapshotData) {
+            const targetMail = document.getElementById('targetEmail').value;
+            const currentStatusTd = document.getElementById(`mailStatus_${totalAlerts}`);
+
+            if (EMAILJS_PUBLIC_KEY === "YOUR_PUBLIC_KEY") {
+                if (currentStatusTd) currentStatusTd.innerHTML = `<span style='color:#aaa;'>模擬成功 (未配置 EmailJS)</span>`;
+                console.log("【模擬發信成功】由於未配置 EmailJS Key，僅於終端列印。收件人：" + targetMail);
+                return;
+            }
+
+            // 準備發送給 EmailJS 的範本參數
+            const templateParams = {
+                to_email: targetMail,
+                alert_time: new Date().toLocaleString(),
+                trigger_reason: reason,
+                volume_level: currentVolume,
+                // 注意：EmailJS 免費版主要傳遞文字，若要傳圖片可直接傳遞 Base64 網址或使用其支援的附件格式
+                snapshot_attach: snapshotData 
+            };
+
+            emailjs.send(EMAILJS_SERVICE_ID, EMAILJS_TEMPLATE_ID, templateParams)
+                .then(() => {
+                    if (currentStatusTd) currentStatusTd.innerHTML = `<span style='color:#2ecc71;'>已送出 📧</span>`;
+                }, (err) => {
+                    if (currentStatusTd) currentStatusTd.innerHTML = `<span style='color:#e74c3c;'>失敗: ${err.text}</span>`;
+                });
+        }
+
+        // 初始化圖表统计
+        function initChart() {
+            const ctx = document.getElementById('alertChart').getContext('2d');
+            chartInstance = new Chart(ctx, {
+                type: 'bar',
+                data: chartData,
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: { y: { beginAtZero: true, ticks: { stepSize: 1 } } }
+                }
+            });
+        }
+
+        // 更新圖表
+        function updateChartData() {
+            const minStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+            const lastIdx = chartData.labels.indexOf(minStr);
+
+            if (lastIdx > -1) {
+                chartData.datasets[0].data[lastIdx] += 1;
+            } else {
+                if (chartData.labels.length > 5) {
+                    chartData.labels.shift();
+                    chartData.datasets[0].data.shift();
+                }
+                chartData.labels.push(minStr);
+                chartData.datasets[0].data.push(1);
+            }
+            chartInstance.update();
+        }
+
+        window.onload = init;
+    </script>
+</body>
+</html>
