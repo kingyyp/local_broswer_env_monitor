@@ -3,125 +3,83 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Edge AI 電腦周邊安全防護與即時監察系統 (本地測試版)</title>
-    <!-- 引入原有的 face-api.js 與 Chart.js -->
-    <script defer src="https://cdn.jsdelivr.net/npm/@vladmandic/face-api/dist/face-api.js"></script>
+    <title>Edge AI 電腦周邊安全防護系統 (完美修復版)</title>
+    <script src="https://cdn.jsdelivr.net/npm/@vladmandic/face-api/dist/face-api.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     
     <style>
-        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background-color: #1a1a24; color: #e0e0e0; margin: 0; padding: 20px; display: flex; flex-direction: column; align-items: center; }
+        body { font-family: -apple-system, BlinkMacSystemFont, sans-serif; background-color: #1a1a24; color: #e0e0e0; margin: 0; padding: 20px; display: flex; flex-direction: column; align-items: center; }
         h1 { color: #e74c3c; margin-bottom: 5px; }
         .subtitle { color: #aaa; margin-bottom: 20px; font-size: 14px; }
         .container { display: flex; flex-wrap: wrap; gap: 20px; justify-content: center; max-width: 1400px; width: 100%; }
         .video-box { position: relative; background: #000; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 15px rgba(0,0,0,0.5); width: 640px; height: 480px; border: 2px solid #333; }
         video, canvas { position: absolute; top: 0; left: 0; width: 640px; height: 480px; }
-        
-        .config-panel { background: #252532; padding: 20px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.3); flex: 1; min-width: 450px; display: flex; flex-direction: column; gap: 15px; }
+        .config-panel { background: #252532; padding: 20px; border-radius: 12px; flex: 1; min-width: 450px; display: flex; flex-direction: column; gap: 15px; }
         .form-group { display: flex; flex-direction: column; gap: 5px; }
         label { font-size: 14px; color: #bdc3c7; font-weight: bold; }
-        input[type="text"], input[type="email"], select { background: #333; border: 1px solid #444; color: #fff; padding: 8px; border-radius: 6px; }
-        
-        .status { font-weight: bold; color: #fff; margin-bottom: 15px; background: #2c3e50; padding: 8px 16px; border-radius: 20px; text-align: center; width: 80%; max-width: 600px; transition: background 0.3s; }
+        input, select { background: #333; border: 1px solid #444; color: #fff; padding: 8px; border-radius: 6px; }
+        .status { font-weight: bold; color: #fff; margin-bottom: 15px; background: #2c3e50; padding: 8px 16px; border-radius: 20px; text-align: center; width: 80%; max-width: 600px; }
         .status.alerting { background: #c0392b; animation: blink 1s infinite; }
         @keyframes blink { 0% { opacity: 1; } 50% { opacity: 0.7; } 100% { opacity: 1; } }
-
-        .btn { background-color: #e74c3c; color: white; border: none; padding: 10px 15px; border-radius: 6px; cursor: pointer; font-size: 14px; font-weight: bold; }
+        .btn { background-color: #e74c3c; color: white; border: none; padding: 12px; border-radius: 6px; cursor: pointer; font-size: 14px; font-weight: bold; }
         .btn-success { background-color: #2ecc71; }
-        .btn-warning { background-color: #f39c12; }
-        .btn-secondary { background-color: #7f8c8d; }
-        .btn:disabled { background-color: #7f8c8d; cursor: not-allowed; }
-
-        .dashboard { background: #252532; padding: 20px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.3); width: 100%; max-width: 1360px; margin-top: 20px; display: grid; grid-template-columns: 1fr 2fr; gap: 20px; }
-        .log-table-container { overflow-y: auto; max-height: 400px; border: 1px solid #444; border-radius: 6px; background: #1e1e28; }
-        table { width: 100%; border-collapse: collapse; font-size: 13px; color: #ccc; }
+        .dashboard { background: #252532; padding: 20px; border-radius: 12px; width: 100%; max-width: 1360px; margin-top: 20px; display: grid; grid-template-columns: 1fr 2fr; gap: 20px; }
+        .log-table-container { overflow-y: auto; max-height: 300px; border: 1px solid #444; background: #1e1e28; }
+        table { width: 100%; border-collapse: collapse; font-size: 13px; }
         th, td { padding: 10px; text-align: left; border-bottom: 1px solid #333; }
-        th { background-color: #2c2c3a; position: sticky; top: 0; color: #fff; }
-        
-        .snapshot-img { width: 80px; height: 60px; object-fit: cover; border-radius: 4px; border: 1px solid #555; }
-        .vol-bar { width: 100%; background: #444; height: 15px; border-radius: 10px; overflow: hidden; position: relative; }
-        .vol-inner { height: 100%; width: 0%; background: #2ecc71; transition: width 0.1s; }
-        
-        .toggle-status { font-weight: bold; margin-left: 5px; }
+        .snapshot-img { width: 80px; height: 60px; object-fit: cover; border-radius: 4px; }
+        .vol-bar { width: 100%; background: #444; height: 15px; border-radius: 10px; overflow: hidden; }
+        .vol-inner { height: 100%; width: 0%; background: #2ecc71; transition: width 0.05s; }
     </style>
 </head>
 <body>
 
     <h1>Edge AI 電腦周邊安全防護與即時監察系統</h1>
-    <div class="subtitle">當檢測到有人試圖接近或接觸電腦時，系統將自動擷取畫面、評估環境音量並記錄於網頁中。</div>
+    <div class="subtitle">【錯誤修復版】修復 TinyFaceDetector 座標讀取 Bug，並優化音訊激活機制。</div>
 
     <div id="status" class="status">⏳ 正在初始化本地 AI 視覺探測核心...</div>
 
     <div class="container">
-        <!-- 影像監視區 -->
         <div class="video-box">
             <video id="video" autoplay muted playsinline></video>
             <canvas id="overlay"></canvas>
         </div>
 
-        <!-- 監控設定與控制台 -->
         <div class="config-panel">
             <h3>🛡️ 系統安全設定</h3>
-            
             <div class="form-group">
-                <label>模擬電郵通知功能開關：</label>
-                <div style="display: flex; align-items: center; gap: 10px;">
-                    <button id="emailToggleBtn" class="btn btn-warning" onclick="toggleEmailSimulation()">模擬電郵通知：開啟中 (ON)</button>
-                </div>
-            </div>
-
-            <div class="form-group">
-                <label>模擬接收通知電郵 (Email)：</label>
-                <input type="email" id="targetEmail" placeholder="example@gmail.com" value="admin@local.test">
-            </div>
-
-            <div class="form-group">
-                <label>聲音感應靈敏度 (當前音量超過此值觸發)：</label>
+                <label>環境音量監測 (綠條有動代表正常)：</label>
                 <div class="vol-bar"><div id="volInner" class="vol-inner"></div></div>
                 <select id="soundThreshold">
                     <option value="999">關閉聲音監測</option>
-                    <option value="50">高靈敏度 (稍有聲響)</option>
-                    <option value="70" selected>中靈敏度 (正常說話/碰撞)</option>
-                    <option value="90">低靈敏度 (大聲喧嘩)</option>
+                    <option value="15">極度靈敏</option>
+                    <option value="30" selected>中等靈敏 (正常說話/碰桌子)</option>
+                    <option value="50">低靈敏度</option>
                 </select>
             </div>
-
             <div class="form-group">
-                <label>警報冷卻時間 (秒，避免連續重複觸發)：</label>
-                <input type="text" id="coolDownTime" value="10">
+                <label>警報冷卻時間 (秒)：</label>
+                <input type="text" id="coolDownTime" value="4">
             </div>
-
-            <div style="margin-top: 10px; display: flex; gap: 10px;">
-                <button id="startBtn" class="btn btn-success" onclick="toggleMonitoring()">開啟安全監察防禦</button>
-            </div>
+            <button id="startBtn" class="btn btn-success" onclick="toggleMonitoring()">開啟安全監察防禦</button>
         </div>
     </div>
 
-    <!-- 數據統計與歷史記錄 -->
     <div class="dashboard">
         <div>
             <h3>📊 統計數據</h3>
-            <p>安全防禦狀態: <span id="defenseStatus" style="color:#e74c3c; font-weight:bold;">未啟動</span></p>
-            <p>本次運行引發警報次數: <span id="alertCount" style="color:#f1c40f; font-weight:bold; font-size:20px;">0</span> 次</p>
-            <div style="width: 100%; height: 200px;">
-                <canvas id="alertChart"></canvas>
-            </div>
+            <p>防禦狀態: <span id="defenseStatus" style="color:#e74c3c; font-weight:bold;">未啟動</span></p>
+            <p>引發警報次數: <span id="alertCount" style="color:#f1c40f; font-weight:bold; font-size:20px;">0</span> 次</p>
         </div>
-        
         <div>
             <h3>📋 侵入與異動歷史記錄</h3>
             <div class="log-table-container">
                 <table>
                     <thead>
-                        <tr>
-                            <th>時間</th>
-                            <th>觸發原因</th>
-                            <th>現場快照</th>
-                            <th>環境音量</th>
-                            <th>模擬電郵狀態</th>
-                        </tr>
+                        <tr><th>時間</th><th>觸發原因</th><th>現場快照</th><th>環境音量</th></tr>
                     </thead>
                     <tbody id="logTrack">
-                        <tr><td colspan="5" style="text-align:center; color:#666;">暫無警報記錄</td></tr>
+                        <tr><td colspan="4" style="text-align:center; color:#666;">暫無警報記錄</td></tr>
                     </tbody>
                 </table>
             </div>
@@ -136,128 +94,102 @@
         const volInner = document.getElementById('volInner');
 
         let isMonitoring = false;
-        let isEmailSimulateEnabled = true; // 電郵功能開關狀態
-        
         let audioContext = null;
         let analyser = null;
-        let microphone = null;
         let javascriptNode = null;
-        
+        let mediaStream = null;
         let currentVolume = 0;
         let totalAlerts = 0;
-        let lastAlertTime = 0; 
-        let chartInstance = null;
-        let chartData = { labels: [], datasets: [{ label: '每分鐘警報次數', data: [], backgroundColor: '#e74c3c' }] };
+        let lastAlertTime = 0;
 
-        // 初始化
         async function init() {
             try {
-                statusDiv.innerText = "⏳ 正在載入 AI 視覺人臉與目標追蹤模型...";
-                const FACE_MODEL_URL = 'https://cdn.jsdelivr.net/npm/@vladmandic/face-api/model/';
-                await faceapi.nets.ssdMobilenetv1.loadFromUri(FACE_MODEL_URL);
-                statusDiv.innerHTML = "🟢 <span style='color: #2ecc71;'>AI 核心載入完成。點擊按鈕即可開啟防禦。</span>";
+                statusDiv.innerText = "⏳ 正在從雲端加載輕量化視覺模型...";
+                const MODEL_URL = 'https://cdn.jsdelivr.net/npm/@vladmandic/face-api/model/';
                 
-                initChart();
+                // 確保加載 TinyFaceDetector 模型
+                await faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL);
+                statusDiv.innerHTML = "🟢 <span style='color: #2ecc71;'>AI 核心加載成功！請點擊按鈕開啟防禦。</span>";
+                
                 startCamera();
             } catch (err) {
-                statusDiv.innerHTML = "❌ 核心載入失敗: " + err.message;
+                statusDiv.innerHTML = "❌ 模型載入失敗: " + err.message;
             }
         }
 
-        // 啟動相機
         function startCamera() {
-            navigator.mediaDevices.getUserMedia({ video: { width: 640, height: 480 } })
-                .then(stream => { video.srcObject = stream; })
-                .catch(err => { statusDiv.innerText = "無法獲取鏡頭權限: " + err.message; });
+            navigator.mediaDevices.getUserMedia({ video: true, audio: true })
+                .then(stream => { 
+                    video.srcObject = stream; 
+                    mediaStream = stream; // 暫存 Stream，留到點擊按鈕時激活音訊
+                })
+                .catch(err => { statusDiv.innerText = "無法獲取相機/麥克風權限: " + err.message; });
         }
 
-        // 控制模擬電郵功能的開關按鈕
-        function toggleEmailSimulation() {
-            isEmailSimulateEnabled = !isEmailSimulateEnabled;
-            const btn = document.getElementById('emailToggleBtn');
-            if (isEmailSimulateEnabled) {
-                btn.innerText = "模擬電郵通知：開啟中 (ON)";
-                btn.className = "btn btn-warning";
-            } else {
-                btn.innerText = "模擬電郵通知：已關閉 (OFF)";
-                btn.className = "btn btn-secondary";
+        // 由用戶點擊按鈕時明確激活的音訊上下文
+        function ensureAudioInitialized() {
+            if (audioContext || !mediaStream) return;
+            try {
+                audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                analyser = audioContext.createAnalyser();
+                const microphone = audioContext.createMediaStreamSource(mediaStream);
+                javascriptNode = audioContext.createScriptProcessor(2048, 1, 1);
+
+                analyser.fftSize = 256;
+                microphone.connect(analyser);
+                analyser.connect(javascriptNode);
+                javascriptNode.connect(audioContext.destination);
+
+                javascriptNode.onaudioprocess = function() {
+                    const array = new Uint8Array(analyser.frequencyBinCount);
+                    analyser.getByteFrequencyData(array);
+                    let values = 0;
+                    for (let i = 0; i < array.length; i++) { values += array[i]; }
+                    currentVolume = Math.round(values / array.length);
+                    
+                    // 更新音量條 UI
+                    volInner.style.width = Math.min(currentVolume * 3, 100) + "%";
+                    
+                    if (isMonitoring) {
+                        checkSoundTrigger();
+                    }
+                };
+            } catch (e) { console.log("音訊初始化失敗", e); }
+        }
+
+        function checkSoundTrigger() {
+            const threshold = parseInt(document.getElementById('soundThreshold').value);
+            if (currentVolume > threshold) { 
+                triggerAlert(`聲音警報 (偵測到異常動靜: ${currentVolume} dB)`); 
             }
         }
 
-        // 啟動與關閉監控開關
-        async function toggleMonitoring() {
+        function toggleMonitoring() {
+            // 關鍵點：藉由用戶點擊明確激活音訊與多媒體
+            ensureAudioInitialized();
+            if (audioContext && audioContext.state === 'suspended') { audioContext.resume(); }
+
             isMonitoring = !isMonitoring;
             const startBtn = document.getElementById('startBtn');
-
             if (isMonitoring) {
                 startBtn.innerText = "停止安全監察防禦";
-                startBtn.className = "btn";
                 document.getElementById('defenseStatus').innerText = "核心防禦中 🛡️";
                 document.getElementById('defenseStatus').style.color = "#2ecc71";
-                statusDiv.innerText = "🚨 系統已進入全時監控狀態...";
-                
-                initAudio();
                 detectionLoop();
             } else {
                 startBtn.innerText = "開啟安全監察防禦";
-                startBtn.className = "btn btn-success";
                 document.getElementById('defenseStatus').innerText = "已暫停";
                 document.getElementById('defenseStatus').style.color = "#e74c3c";
-                statusDiv.innerHTML = "🟢 系統已暫停防禦。";
-                
-                if (audioContext) audioContext.close();
                 const ctx = canvas.getContext('2d');
                 ctx.clearRect(0, 0, canvas.width, canvas.height);
             }
         }
 
-        // 初始化音訊監測 (Mic)
-        function initAudio() {
-            navigator.mediaDevices.getUserMedia({ audio: true, video: false })
-                .then(stream => {
-                    audioContext = new (window.AudioContext || window.webkitAudioContext)();
-                    analyser = audioContext.createAnalyser();
-                    microphone = audioContext.createMediaStreamSource(stream);
-                    javascriptNode = audioContext.createScriptProcessor(2048, 1, 1);
-
-                    analyser.smoothingTimeConstant = 0.8;
-                    analyser.fftSize = 1024;
-
-                    microphone.connect(analyser);
-                    analyser.connect(javascriptNode);
-                    javascriptNode.connect(audioContext.destination);
-
-                    javascriptNode.onaudioprocess = function() {
-                        const array = new Uint8Array(analyser.frequencyBinCount);
-                        analyser.getByteFrequencyData(array);
-                        let values = 0;
-                        const length = array.length;
-                        for (let i = 0; i < length; i++) { values += array[i]; }
-                        currentVolume = Math.round(values / length);
-                        
-                        if (isMonitoring) {
-                            volInner.style.width = Math.min(currentVolume * 2, 100) + "%";
-                            checkSoundTrigger();
-                        }
-                    };
-                }).catch(err => {
-                    console.log("未獲取麥克風權限或無音訊設備: " + err.message);
-                });
-        }
-
-        // 聲音引發警報檢查
-        function checkSoundTrigger() {
-            const threshold = parseInt(document.getElementById('soundThreshold').value);
-            if (currentVolume > threshold) {
-                triggerAlert("周圍偵測到異常聲響 / 碰撞聲");
-            }
-        }
-
-        // 主監控循環 (視覺部分)
         async function detectionLoop() {
             if (!isMonitoring || video.paused || video.ended) return;
 
-            const detections = await faceapi.detectAllFaces(video, new faceapi.SsdMobilenetv1Options({ minConfidence: 0.5 }));
+            // 執行人臉偵測
+            const detections = await faceapi.detectAllFaces(video, new faceapi.TinyFaceDetectorOptions({ inputSize: 224, scoreThreshold: 0.5 }));
             const displaySize = { width: 640, height: 480 };
             faceapi.matchDimensions(canvas, displaySize);
             const resizedDetections = faceapi.resizeResults(detections, displaySize);
@@ -265,101 +197,47 @@
             const ctx = canvas.getContext('2d');
             ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-            if (resizedDetections.length > 0) {
+            if (resizedDetections && resizedDetections.length > 0) {
                 resizedDetections.forEach(detection => {
-                    const box = detection.detection.box;
-                    const drawBox = new faceapi.draw.DrawBox(box, { label: '⚠️ 未授權接近者', boxColor: '#e74c3c' });
-                    drawBox.draw(canvas);
+                    // 安全相容性修復：相容含有 .box 或本身就是 box 的結構
+                    const box = detection.box || detection.detection.box || detection;
+                    if (box && box.x !== undefined) {
+                        const drawBox = new faceapi.draw.DrawBox(box, { label: '⚠️ 偵測到人員接近', boxColor: '#e74c3c' });
+                        drawBox.draw(canvas);
+                    }
                 });
-
-                triggerAlert(`視覺警報：偵測到 ${resizedDetections.length} 名人員接近電腦範圍`);
+                triggerAlert(`視覺警報：畫面出現有人接近 (偵測到人臉)`);
             }
-
-            setTimeout(() => detectionLoop(), 200);
+            
+            // 每 150 毫秒偵測一次，降低 CPU 負擔並保持即時性
+            setTimeout(() => detectionLoop(), 150);
         }
 
-        // 觸發警報核心機制
         function triggerAlert(reason) {
             const now = Date.now();
             const coolDown = parseInt(document.getElementById('coolDownTime').value) * 1000;
-
-            statusDiv.classList.add('alerting');
-            statusDiv.innerText = `🚨 警告!! ${reason}`;
-            setTimeout(() => statusDiv.classList.remove('alerting'), 2000);
-
-            // 檢查是否在冷卻時間內
-            if (now - lastAlertTime < coolDown) {
-                return; 
-            }
+            if (now - lastAlertTime < coolDown) return; 
 
             lastAlertTime = now;
             totalAlerts++;
             document.getElementById('alertCount').innerText = totalAlerts;
 
-            // 擷取目前鏡頭畫面作為快照
+            // 擷取現場快照
             const snapshotCanvas = document.createElement('canvas');
-            snapshotCanvas.width = 320;
-            snapshotCanvas.height = 240;
+            snapshotCanvas.width = 160; snapshotCanvas.height = 120;
             const sCtx = snapshotCanvas.getContext('2d');
-            sCtx.drawImage(video, 0, 0, 320, 240);
+            sCtx.drawImage(video, 0, 0, 160, 120);
             const snapshotDataUrl = snapshotCanvas.toDataURL('image/jpeg');
 
-            // 判斷當前模擬電郵狀態字串
-            let mailStatusHTML = "";
-            if (isEmailSimulateEnabled) {
-                const targetMail = document.getElementById('targetEmail').value;
-                mailStatusHTML = `<span style="color:#2ecc71;">[模擬] 已發信至 ${targetMail} 📧</span>`;
-            } else {
-                mailStatusHTML = `<span style="color:#7f8c8d;">[未開啟] 停止發送</span>`;
-            }
-
-            // 更新歷史記錄表格
             if (totalAlerts === 1) logTrack.innerHTML = ''; 
             const tr = document.createElement('tr');
-            const timeStr = new Date().toLocaleTimeString();
             tr.innerHTML = `
-                <td>${timeStr}</td>
+                <td>${new Date().toLocaleTimeString()}</td>
                 <td style="color:#e74c3c; font-weight:bold;">${reason}</td>
                 <td><img class="snapshot-img" src="${snapshotDataUrl}" /></td>
                 <td>${currentVolume} dB</td>
-                <td>${mailStatusHTML}</td>
             `;
             logTrack.insertBefore(tr, logTrack.firstChild);
-
-            // 更新圖表數據
-            updateChartData();
-        }
-
-        // 初始化圖表統計
-        function initChart() {
-            const ctx = document.getElementById('alertChart').getContext('2d');
-            chartInstance = new Chart(ctx, {
-                type: 'bar',
-                data: chartData,
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    scales: { y: { beginAtZero: true, ticks: { stepSize: 1 } } }
-                }
-            });
-        }
-
-        // 更新圖表
-        function updateChartData() {
-            const minStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-            const lastIdx = chartData.labels.indexOf(minStr);
-
-            if (lastIdx > -1) {
-                chartData.datasets[0].data[lastIdx] += 1;
-            } else {
-                if (chartData.labels.length > 5) {
-                    chartData.labels.shift();
-                    chartData.datasets[0].data.shift();
-                }
-                chartData.labels.push(minStr);
-                chartData.datasets[0].data.push(1);
-            }
-            chartInstance.update();
         }
 
         window.onload = init;
